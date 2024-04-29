@@ -1,0 +1,23 @@
+{
+  "name": "bilibili-favorite-sync",
+  "version": "1.0.0",
+  "description": "一个自动同步你的b站收藏夹到本地以防失效的程序",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SmallZombie/Bilibili-Favorite-Sync.git"
+  },
+  "author": "SmallZombie",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/SmallZombie/Bilibili-Favorite-Sync/issues"
+  },
+  "homepage": "https://github.com/SmallZombie/Bilibili-Favorite-Sync#readme",
+  "dependencies": {
+    "md5": "^2.3.0",
+    "qrcode": "^1.5.3"
+  }
+}
