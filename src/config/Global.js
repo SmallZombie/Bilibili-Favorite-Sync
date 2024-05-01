@@ -6,8 +6,6 @@ let G_CONFIG = null;
 let G_LIBRARY_CONFIG = null;
 /** 本地库的绝对路径 */
 let G_LIBRARY_PATH = null;
-/** 临时下载目录的绝对路径 */
-let G_TEMP_PATH = null;
 
 const G_DEBUG = true;
 
@@ -20,13 +18,12 @@ function reload() {
     let path = PATH.join(__dirname, '../../config.json');
     if (FS.existsSync(path)) {
         G_CONFIG = require(path);
+        G_LIBRARY_PATH = PATH.join(__dirname, '../../' + G_CONFIG.library_path);
     } else return 0;
 
     path = PATH.join(__dirname, '../../' + G_CONFIG.library_path + '/index.json');
     if (FS.existsSync(path)) {
         G_LIBRARY_CONFIG = require(path);
-        G_LIBRARY_PATH = PATH.join(__dirname, '../../' + G_CONFIG.library_path);
-        G_TEMP_PATH = PATH.join(G_LIBRARY_PATH, 'temp');
     } else return 2;
 
     return 1;
@@ -50,13 +47,9 @@ function getLibraryPath() {
     return G_LIBRARY_PATH;
 }
 
-function getTempPath() {
-    return G_TEMP_PATH;
-}
-
 
 module.exports = {
-    getConfig, getLibraryConfig, getLibraryPath, getTempPath,
+    getConfig, getLibraryConfig, getLibraryPath,
     reload, save,
     G_DEBUG
 }

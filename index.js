@@ -4,8 +4,8 @@ const { spawn } = require('child_process');
 const PATH = require('path');
 
 
-const { reload, getLibraryConfig, save, getLibraryPath } = require('./src/config/global.js');
-const { start } = require('./src/main.js');
+const { reload, getLibraryConfig, save, getLibraryPath } = require('./src/config/Global.js');
+const { start } = require('./src/Main.js');
 const { updateInfos, updateCommandInfos, setAllowInput } = require('./src/UIManager.js');
 const path = require('path');
 
@@ -24,18 +24,8 @@ updateCommandInfos(`使用 \`help\` 来获取帮助`);
 setAllowInput(false);
 
 
-// 0. 解析参数
-// const _args = process.argv.slice(2);
-// const args = {};
-// for (let i = 0; i < _args.length; i++) {
-//     if (i % 2 === 0 && i + 1 < _args.length) {
-//         args[_args[i]] = _args[i + 1];
-//     }
-// }
-
-
 // 1. 准备 config
-if (!FS.existsSync('config.json')) { // args.configPath
+if (!FS.existsSync('config.json')) {
     FS.writeFileSync(PATH.join(__dirname, 'config.json', JSON.stringify({
         "//": '配置文件版本，不要改动',
         version: 1,
@@ -66,9 +56,10 @@ reload(); // 加载配置文件
 
 // 2. 初始化库
 if (!FS.existsSync(getLibraryPath())) {
-    FS.mkdirSync(getLibraryPath());
-    FS.mkdirSync(getLibraryPath() + '/favorites');
-    FS.mkdirSync(getLibraryPath() + '/recycle');
+    FS.mkdirSync(PATH.join(getLibraryPath(), 'favorites'), { recursive: true });
+    FS.mkdirSync(PATH.join(getLibraryPath(), 'videos'));
+    FS.mkdirSync(PATH.join(getLibraryPath(), 'recycle'));
+    FS.mkdirSync(PATH.join(getLibraryPath(), 'temp'));
 
     // 创建默认清单文件
     FS.writeFileSync(getLibraryPath() + '/index.json', JSON.stringify({
@@ -79,9 +70,31 @@ if (!FS.existsSync(getLibraryPath())) {
             refresh_token: null,
             user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0'
         },
+        filter: {
+            '//': '两个名单都必须填入收藏夹 id:Number',
+            blacklist: {
+                enable: false,
+                list: []
+            },
+            whitelist: {
+                enable: false,
+                list: []
+            }
+        },
+        '//': '要同步的的内容，下面已经列出了所有候选值',
+        sync: [
+            'cover',
+            'video',
+            'audio',
+            'subtitle',
+            'danmu'
+        ],
         favorites: []
     }));
+
+    updateInfos('初始化库：' + getLibraryPath());
 }
+reload(); // 重载一次
 
 
 // 3. 登录并验证

@@ -1,7 +1,7 @@
 exports.execute = execute;
 
 
-const { reload } = require('../config/global.js');
+const { reload } = require('../config/Global.js');
 
 
 function execute(...args) {

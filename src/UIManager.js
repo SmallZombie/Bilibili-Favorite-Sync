@@ -12,7 +12,7 @@ module.exports = {
 
 const readline = require('readline');
 const { execute } = require('./command/CommandManager.js');
-const { G_DEBUG } = require('./config/global.js');
+const { G_DEBUG } = require('./config/Global.js');
 
 
 // 初始化 readline 接口

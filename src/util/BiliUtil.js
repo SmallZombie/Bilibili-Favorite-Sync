@@ -1,15 +1,16 @@
 module.exports = {
     getWbiKeys, encWbi,
-    downloadVideo
+    downloadEp, downloadVideo
 }
 
 
 const MD5 = require('md5');
-const { getLibraryConfig, getTempPath, getLibraryPath } = require('../config/global');
+const { getLibraryConfig, getLibraryPath } = require('../config/Global');
 const { download } = require('./DownloadUtil');
 const PATH = require('path');
 const FS = require('fs');
 const { updateInfos } = require('../UIManager');
+const { timeout } = require('./BaseUtil');
 
 
 /** 内部 */
@@ -82,78 +83,134 @@ function getWbiKeys(sessdata, user_agent) {
 
 
 /**
- * 下载 1p 视频，会将所有内容下载到给定路径的 `<savePath>/<cid>` 下(<cid>由此方法创建)
+ * 下载 1p 视频，会将所有内容下载到给定路径的 `<savePath>/<cid>` 下(<cid>由此方法创建)，会覆盖已存在内容
  * @param {Number} aid aid
  * @param {Number} cid cid
- * @param {String} savePath 保存路径，建议使用绝对路径
+ * @param {String} savePath 保存路径，会自动在里面新教一个 cid 文件夹作为工作目录，建议使用绝对路径
  * @param {Object} ops 配置项，用于指定要下载的内容
+ * @returns {Promise} promise
  */
-function downloadVideo(aid, cid, savePath, ops = {
-    video: true, // 是否下载视频
-    audio: true, // 是否下载音频
-    cover: true, // 是否下载封面
-    subtitle: true, // 是否下载字幕
-}) {
+function downloadEp(aid, cid, savePath, ops) {
+    if (!aid) throw new Error('aid 不能为空');
+    if (!cid) throw new Error('cid 不能为空');
+    if (!savePath) throw new Error('savePath 不能为空');
+    if (!ops) throw new Error('ops 不能为空');
+
+
     return new Promise(async (resolve, reject) => {
-        if (!aid) throw new Error('aid 不能为空');
-        if (!cid) throw new Error('cid 不能为空');
-        if (!savePath) throw new Error('savePath 不能为空');
-        if (!ops) throw new Error('ops 不能为空');
-        if (ops.movie && (ops.video || ops.audio)) throw new Error('movie 不能与 video 或 audio 共存');
+        savePath = PATH.join(savePath, String(cid));
+        if (!FS.existsSync(savePath)) FS.mkdirSync(savePath);
+        const tempPath = PATH.join(getLibraryPath(), 'temp');
 
+        // 如果需要音视频流且音视频流有一个不存在
+        if (ops.video || ops.audio && (!FS.existsSync(PATH.join(savePath, 'video')) || !FS.existsSync(PATH.join(savePath, 'audio')))) {
+            await new Promise(async (resolve, reject) => {
+                const res = await fetch(`https://api.bilibili.com/x/player/wbi/playurl?avid=${aid}&cid=${cid}&fnval=4048`, {
+                    headers: {
+                        Cookie: 'SESSDATA=' + getLibraryConfig().account.token
+                    }
+                }).then(res => res.json());
 
-        // 获取音视频流信息
-        const res = await fetch(`https://api.bilibili.com/x/player/wbi/playurl?avid=${aid}&cid=${cid}&fnval=4048`, {
-            headers: {
-                Cookie: 'SESSDATA=' + getLibraryConfig().account.token
-            }
-        }).then(res => res.json());
+                if (ops.video && !FS.existsSync(PATH.join(savePath, 'video'))) {
+                    const video_url = new URL(res.data.dash.video[0].base_url);
+                    await download({
+                        hostname: video_url.hostname,
+                        path: video_url.pathname + video_url.search,
+                        port: video_url.port,
+                        headers: {
+                            Referer: 'https://www.bilibili.com/',
+                            'User-Agent': getLibraryConfig().account.user_agent
+                        }
+                    }, PATH.join(tempPath, String(cid) + '.mp4'), PATH.join(savePath, 'video'));
 
-        if (!FS.existsSync(PATH.join(savePath, String(cid)))) FS.mkdirSync(PATH.join(savePath, String(cid)));
-
-        if (ops.video) {
-            const video_url = new URL(res.data.dash.video[0].base_url);
-            await download({
-                hostname: video_url.hostname,
-                path: video_url.pathname + video_url.search,
-                port: video_url.port,
-                headers: {
-                    Referer: 'https://www.bilibili.com/',
-                    'User-Agent': getLibraryConfig().account.user_agent
+                    updateInfos('视频下载完成 ' + cid);
                 }
-            }, PATH.join(getTempPath(), `${cid}.mp4`), PATH.join(savePath, String(cid), 'video'));
 
-            updateInfos('视频下载完成 ' + cid);
+                if (ops.audio && !FS.existsSync(PATH.join(savePath, 'audio'))) {
+                    const audio_url = new URL(res.data.dash.audio[0].base_url);
+                    await download({
+                        hostname: audio_url.hostname,
+                        path: audio_url.pathname + audio_url.search,
+                        port: audio_url.port,
+                        headers: {
+                            Referer: 'https://www.bilibili.com/',
+                            'User-Agent': getLibraryConfig().account.user_agent
+                        }
+                    }, PATH.join(tempPath, String(cid) + '.mp3'), PATH.join(savePath, 'audio'));
+
+                    updateInfos('音频下载完成 ' + cid);
+                }
+
+                resolve();
+            });
         }
 
-        if (ops.audio) {
-            const audio_url = new URL(res.data.dash.audio[0].base_url);
-            await download({
-                hostname: audio_url.hostname,
-                path: audio_url.pathname + audio_url.search,
-                port: audio_url.port,
-                headers: {
-                    Referer: 'https://www.bilibili.com/',
-                    'User-Agent': getLibraryConfig().account.user_agent
+        if (ops.cover && !FS.existsSync(PATH.join(savePath, 'cover'))) {
+            const cover_url = await new Promise(async (resolve, reject) => {
+                if (ops.cover_url) resolve(ops.cover_url);
+                else {
+                    const res = await fetch('https://api.bilibili.com/x/web-interface/view/detail?aid=' + aid).then(res => res.json());
+                    resolve(new URL(res.data.View.pages.find(v => v.cid === cid).first_frame));
                 }
-            }, PATH.join(getTempPath(), `${cid}.mp3`), PATH.join(savePath, String(cid), 'audio'));
-
-            updateInfos('音频下载完成 ' + cid);
-        }
-
-        if (ops.cover) {
-            const res = await fetch('https://api.bilibili.com/x/web-interface/view/detail?aid=' + aid).then(res => res.json());
-            const cover_url = new URL(res.data.View.pages.find(v => v.cid === cid).first_frame);
+            });
             await download({
                 hostname: cover_url.hostname,
                 path: cover_url.pathname + cover_url.search,
                 port: cover_url.port
-            }, PATH.join(getTempPath(), `${cid}.png`), PATH.join(savePath, String(cid), 'cover'));
+            }, PATH.join(tempPath, String(cid) + '.png'), PATH.join(savePath, 'cover'));
 
             updateInfos('ep 封面下载完成 ' + cid);
         }
 
-        // TODO subtitle...
+        // TODO subtitle... 2
+        // TODO danmu... 1
+
+        resolve();
+    });
+}
+
+/**
+ * 下载一个视频，会自动使用 `downloadEp` 方法下载所有 ep
+ * @param {Number} aid aid
+ * @param {String} savePath 保存路径，会自动在里面新建一个 aid 文件夹作为工作目录，建议使用绝对路径
+ * @param {Object} ops 配置项，用于指定要下载的内容
+ * @returns {Promise} promise
+ */
+function downloadVideo(aid, savePath, ops) {
+    if (!aid) throw new Error('aid 不能为空');
+    if (!savePath) throw new Error('savePath 不能为空');
+    if (!ops) throw new Error('ops 不能为空');
+
+
+    return new Promise(async (resolve, reject) => {
+        savePath = PATH.join(savePath, String(aid));
+        if (!FS.existsSync(savePath)) FS.mkdirSync(savePath);
+
+        const res = await fetch(`https://api.bilibili.com/x/web-interface/view/detail?aid=${aid}`).then(res => res.json());
+
+        if (ops.cover && !FS.existsSync(PATH.join(savePath, 'cover'))) {
+            const cover_url = new URL(res.data.View.pic);
+            await download({
+                hostname: cover_url.hostname,
+                path: cover_url.pathname + cover_url.search,
+                port: cover_url.port,
+            }, PATH.join(PATH.join(getLibraryPath(), 'temp'), String(aid) + '.png'), PATH.join(savePath, 'cover'));
+
+            updateInfos('封面下载完成：' + aid);
+        }
+
+        // 下载所有 ep
+        for (const i of res.data.View.pages) {
+            updateInfos(`下载 ep：${i.cid} ${i.part}`);
+
+            await timeout(getLibraryConfig().sync.length * 2000);
+
+            ops.cover_url = new URL(i.first_frame);
+            await downloadEp(aid, i.cid, savePath, ops);
+
+            updateInfos(`下载完成：${i.cid} ${i.part}`);
+        }
+
         resolve();
     });
 }
