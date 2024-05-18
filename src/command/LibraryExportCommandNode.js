@@ -25,7 +25,9 @@ function execute(args) {
                     return;
                 }
 
-                exportFav(fav);
+                try {
+                    await exportFav(fav);
+                } catch(e) { reject(e); }
                 resolve(`收藏夹已导出至 "${PATH.join(getLibraryPath(), 'exports', fav)}"`);
                 break;
             }
@@ -44,7 +46,9 @@ function execute(args) {
                         return;
                     }
 
-                    await exportVid(vid, ep, exportPath);
+                    try {
+                        await exportVid(vid, ep, exportPath);
+                    } catch(e) { reject(e); }
                     resolve(`视频已导出至 "${PATH.join(getLibraryPath(), 'exports', vid)}"`);
                 } else {
                     const vid = args[1];
@@ -53,7 +57,9 @@ function execute(args) {
                         return;
                     }
 
-                    await exportVid(vid, null, exportPath);
+                    try {
+                        await exportVid(vid, null, exportPath);
+                    } catch(e) { reject(e); }
                     resolve(`视频已导出至 "${PATH.join(getLibraryPath(), 'exports', vid)}"`);
                 }
                 break;

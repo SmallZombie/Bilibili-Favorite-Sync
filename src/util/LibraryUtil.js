@@ -6,22 +6,27 @@ module.exports = {
 const FS = require('fs');
 const PATH = require('path');
 const FFMPEG = require('fluent-ffmpeg');
-const { getLibraryPath, logger } = require('../config/Global.js');
+const { getLibraryPath, logger, getLibraryConfig } = require('../config/Global.js');
 
 
 /**
  * 导出整个收藏夹
  * @param {String} id 收藏夹 id
  */
-function exportFav(id) {
-    const path = PATH.join(getLibraryPath(), 'favorites', id);
+async function exportFav(id) {
+    if (!getLibraryConfig().favorites.find(v => v.id === Number(id))) throw new Error('收藏夹不存在：' + id);
     const exportPath = PATH.join(getLibraryPath(), 'exports', id);
-    if (!FS.existsSync(path)) throw new Error('收藏夹不存在');
 
     if (!FS.existsSync(exportPath)) FS.mkdirSync(exportPath);
 
-    const favs = FS.readdirSync(path);
-    for (const i of favs) exportVid(i, null, exportPath);
+    // 找到对应的清单，然后导出
+    const path = PATH.join(getLibraryPath(), 'favorites', id + '.json');
+    const vids = require(path);
+    for (const ii of vids) {
+        try {
+            await exportVid(String(ii), null, exportPath);
+        } catch(e) { logger.err(e); }
+    }
 }
 
 /**
@@ -32,7 +37,7 @@ function exportFav(id) {
  */
 async function exportVid(aid, cid, path) {
     const vidPath = PATH.join(getLibraryPath(), 'videos', aid);
-    if (!FS.existsSync(vidPath)) throw new Error('视频不存在');
+    if (!FS.existsSync(vidPath)) throw new Error('视频不存在：' + aid);
     const exportPath = PATH.join(path, aid);
 
 
@@ -46,8 +51,7 @@ async function exportVid(aid, cid, path) {
 
     if (cid) await exportEp(aid, cid, exportPath);
     else {
-        const eps = FS.readdirSync(vidPath);
-        for (const i of eps) {
+        for (const i of FS.readdirSync(vidPath)) {
             // 必须是目录
             if (FS.lstatSync(PATH.join(vidPath, i)).isDirectory()) {
                 await exportEp(aid, i, exportPath);
@@ -80,7 +84,7 @@ function exportEp(aid, cid, path) {
         const videoPath = PATH.join(epPath, 'video');
         const videoExpPath = PATH.join(exportPath, 'video.mp4');
         const audioPath = PATH.join(epPath, 'audio');
-        if (FS.existsSync(videoPath) && FS.existsSync(audioPath)) {
+        if (!FS.existsSync(videoExpPath) && FS.existsSync(videoPath) && FS.existsSync(audioPath)) {
             // 创建ffmpeg命令
             const command = FFMPEG(videoPath)
                 .input(audioPath)
@@ -89,7 +93,7 @@ function exportEp(aid, cid, path) {
                 .outputOptions('-strict experimental')
                 .save(videoExpPath)
 
-            command.on('error', reject).on('end', resolve);
+            command.on('end', resolve).on('error', reject);
         } else if (FS.existsSync(videoPath)) FS.copyFileSync(videoPath, videoExpPath);
         else FS.existsSync(audioPath);
 
