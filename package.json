@@ -1,6 +1,6 @@
 {
   "name": "bilibili-favorite-sync",
-  "version": "1.0.0",
+  "version": "0.1.2",
   "description": "一个自动同步你的b站收藏夹到本地以防失效的程序",
   "main": "index.js",
   "scripts": {

@@ -182,7 +182,7 @@ async function syncOnce() {
  */
 function start() {
     logger.info('[!] 开始同步线程');
-    running = setInterval(syncOnce, 20 * 60 * 1000);
+    running = setInterval(syncOnce, 1000 * 60 * 30); // 30 min
     syncOnce();
 }
 
@@ -202,26 +202,46 @@ function stop() {
  * 同步中不能使用该方法，该方法会在同步后自动调用
  */
 function clean() {
+    function _clean(arg1, arg2) {
+        FS.renameSync(arg1, arg2);
+        logger.info(`    清理 "${arg1}"`);
+    }
+
+
     if (cleaning) throw new Error('无法清理：已有清理任务正在运行');
     if (syncing) throw new Error('无法清理：正在进行同步');
     cleaning = true;
 
+    const recPath = PATH.join(getLibraryPath(), 'recycle');
+
     // 获取全部收藏夹的全部引用
     let quotes = [];
-    const favBasePath = PATH.join(getLibraryPath(), 'favorites');
-    for (const i of FS.readdirSync(favBasePath)) {
-        const file = require(PATH.join(favBasePath, i));
+    const favsPath = PATH.join(getLibraryPath(), 'favorites');
+    for (const i of FS.readdirSync(favsPath)) {
+        const file = require(PATH.join(favsPath, i));
         quotes = quotes.concat(file);
     }
 
     // 获取全部本地视频
-    const vidBasePath = PATH.join(getLibraryPath(), 'videos');
-    for (const i of FS.readdirSync(vidBasePath)) {
+    const vidsPath = PATH.join(getLibraryPath(), 'videos');
+    for (const i of FS.readdirSync(vidsPath)) {
         if (!quotes.includes(Number(i))) {
-            const path = PATH.join(vidBasePath, i);
-            FS.renameSync(path, PATH.join(getLibraryPath(), 'recycle', i));
-            logger.info(`    清理 "${path}"`);
+            const path = PATH.join(vidsPath, i);
+            _clean(path, PATH.join(recPath, i));
         }
+    }
+
+    // 检查多余的收藏夹清单文件
+    for (const i of FS.readdirSync(favsPath)) {
+        if (!getLibraryConfig().favorites.find(v => v.id === Number(i.split('.')[0]))) {
+            _clean(PATH.join(favsPath, i), PATH.join(recPath, i));
+        }
+    }
+
+    // 清空 temp
+    const tempPath = PATH.join(getLibraryPath(), 'temp');
+    for (const i of FS.readdirSync(tempPath)) {
+        _clean(PATH.join(tempPath, i), PATH.join(recPath, i));
     }
 
     cleaning = false;
