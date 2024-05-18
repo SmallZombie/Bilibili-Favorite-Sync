@@ -1,8 +1,11 @@
+const { stop } = require("../Main");
+
 exports.execute = execute;
 
 
-function execute(...args) {
+function execute(args) {
     return new Promise((resolve, reject) => {
-        process.exit();
-    })
+        stop();
+        resolve();
+    });
 }

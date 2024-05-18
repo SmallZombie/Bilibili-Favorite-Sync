@@ -2,15 +2,13 @@ const FS = require('fs');
 const QRCODE = require('qrcode');
 const { spawn } = require('child_process');
 const PATH = require('path');
+const { reload, getLibraryConfig, save, getLibraryPath, logger, pushService } = require('./src/config/Global.js');
+const { setAllowInput } = require('./src/CLI.js');
+const { timeout } = require('./src/util/BaseUtil.js');
 
 
-const { reload, getLibraryConfig, save, getLibraryPath } = require('./src/config/Global.js');
-const { start } = require('./src/Main.js');
-const { updateInfos, updateCommandInfos, setAllowInput } = require('./src/UIManager.js');
-const path = require('path');
-
-
-updateInfos(`
+console.clear();
+console.log(`
   ____  ______ _____
  |  _ \\|  ____/ ____|
  | |_) | |__ | (___  _   _ _ __   ___
@@ -20,8 +18,7 @@ updateInfos(`
                       __/ |
                      |___/
 `);
-updateCommandInfos(`使用 \`help\` 来获取帮助`);
-setAllowInput(false);
+logger.info(`TIPS: 你可以在同步之外使用一些命令来控制应用，使用 \`help\` 获取帮助`);
 
 
 // 1. 准备 config
@@ -60,6 +57,7 @@ if (!FS.existsSync(getLibraryPath())) {
     FS.mkdirSync(PATH.join(getLibraryPath(), 'videos'));
     FS.mkdirSync(PATH.join(getLibraryPath(), 'recycle'));
     FS.mkdirSync(PATH.join(getLibraryPath(), 'temp'));
+    FS.mkdirSync(PATH.join(getLibraryPath(), 'exports'));
 
     // 创建默认清单文件
     FS.writeFileSync(getLibraryPath() + '/index.json', JSON.stringify({
@@ -72,6 +70,7 @@ if (!FS.existsSync(getLibraryPath())) {
         },
         filter: {
             '//': '两个名单都必须填入收藏夹 id:Number',
+            "//": "两个名单不可同时启用",
             blacklist: {
                 enable: false,
                 list: []
@@ -89,107 +88,91 @@ if (!FS.existsSync(getLibraryPath())) {
             'subtitle',
             'danmu'
         ],
-        favorites: []
+        "//": "止步于此，下面的内容请不要修改",
+        favorites: [],
+        last_pos: {
+            favorite: null,
+            video: null
+        }
     }));
 
-    updateInfos('初始化库：' + getLibraryPath());
+    logger.info('初始化库：' + getLibraryPath());
 }
 reload(); // 重载一次
 
 
 // 3. 登录并验证
-(() => {
-    new Promise((resolve, reject) => {
-        if (getLibraryConfig().account.token) {
-            resolve();
-            return;
+(async () => {
+    function _saveQr(url) {
+        return new Promise((resolve, reject) => {
+            QRCODE.toFile('./qr.png', url, e => {
+                if (e) resolve('保存二维码时发生错误：' + e);
+                resolve();
+            });
+        });
+    }
+
+
+    // 没登录，尝试登录
+    if (!getLibraryConfig().account.token) {
+        logger.info('尝试获取二维码...');
+        // 获取、生成、保存二维码
+        const qrcode_key = await (async () => {
+            const res = await fetch('https://passport.bilibili.com/x/passport-login/web/qrcode/generate').then(res => res.json());
+            if (res.code === 0) {
+                await _saveQr(res.data.url);
+                logger.info(`二维码已保存至 "${PATH.join(__dirname, './qr.png')}"`);
+                return res.data.qrcode_key;
+            } else throw new Error(`获取二维码时发生错误：${res.code} ${res.message}`);
+        })();
+        logger.warn(qrcode_key);
+
+        const ls = spawn('explorer.exe', [PATH.join(__dirname, './qr.png')]);
+
+        // 等待扫描然后关闭
+        logger.info('等待扫描并登录...');
+        let count = 0;
+        while (++count < 30) {
+            logger.info(count);
+            const res = await fetch('https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=' + qrcode_key).then(res => {
+                const reg = /^SESSDATA=([^;]+);/.exec(res.headers.get('set-cookie'));
+                if (reg) getLibraryConfig().account.token = reg[1];
+                return res.json();
+            });
+
+            // 0: 登录成功
+            // 86101: 未扫描
+            // 86090: 扫了但没确认
+            // 86038: 失效
+            if (res.data.code === 0) {
+                getLibraryConfig().account.refresh_token = res.data.refresh_token;
+                break;
+            } else if (res.data.code === 86038) throw new Error('二维码已失效');
+
+            await timeout(3000);
         }
 
-        // 扫码登录
-        updateInfos('尝试获取二维码...');
-        fetch('https://passport.bilibili.com/x/passport-login/web/qrcode/generate')
-            .then(res => res.json())
-            // 生成、保存二维码
-            .then(res => new Promise((resolve, reject) => {
-                if (res.code === 0) {
-                    QRCODE.toFile('./qr.png', res.data.url, e => {
-                        if (e) reject('保存二维码时发生错误：' + e);
-                        updateInfos(`二维码已保存至 "${path.join(__dirname, './qr.png')}"`);
-                        resolve(res.data.qrcode_key);
-                    });
-                } else reject(`获取二维码时发生错误：${res.code} ${res.message}`);
-            }))
-            // 打开、等待扫描然后关闭
-            .then(qrcode_key => new Promise((resolve, reject) => {
-                const ls = spawn('explorer.exe', [path.join(__dirname, './qr.png')]);
+        ls.kill();
+        save();
+    }
 
-                // 等待扫描
-                updateInfos('等待扫描并登录...');
-                let timer = setInterval(() => {
-                    fetch('https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=' + qrcode_key)
-                        .then(res => {
-                            const reg = /^SESSDATA=([^;]+);/.exec(res.headers.get('set-cookie'));
-                            if (reg) {
-                                getLibraryConfig().account.token = reg[1];
-                            }
-                            return res.json();
-                        })
-                        .then(res => {
-                            // 0: 登录成功
-                            // 86101: 未扫描
-                            // 86090: 扫了但没确认
-                            // 86038: 失效
-                            if (res.data.code === 0) {
-                                ls.kill();
-                                clearInterval(timer);
 
-                                getLibraryConfig().account.refresh_token = res.data.refresh_token;
-                                resolve();
-                            } else if (res.data.code === 86038) {
-                                ls.kill();
-                                clearInterval(timer);
+    logger.info('验证登录...');
+    const res = await fetch('https://api.bilibili.com/x/web-interface/nav', {
+        headers: {
+            Cookie: 'SESSDATA=' + getLibraryConfig().account.token
+        }
+    }).then(res => res.json());
 
-                                reject('二维码已失效');
-                            }
-                        })
-                        .catch(e => reject('检查扫描状态时发生错误：' + e));
-                }, 3000);
+    // 0: 正常
+    // -101: 没 sessdata or sessdata 无效
+    if (res.code === 0) {
+        if (!getLibraryConfig().account.uid) {
+            getLibraryConfig().account.uid = res.data.mid;
+            save();
+        }
+        logger.info('登录成功');
+    } else throw new Error(`登录检查失败：${res.code} ${res.message}`);
 
-            }))
-            .then(() => {
-                save();
-                resolve();
-            })
-            .catch(e => reject('尝试登录时发生错误：' + e));
-    })
-        .then(() => {
-            updateInfos('验证登录...');
-
-            return fetch('https://api.bilibili.com/x/web-interface/nav', {
-                headers: {
-                    Cookie: 'SESSDATA=' + getLibraryConfig().account.token
-                }
-            });
-        })
-        .then(res => res.json())
-        .then(res => new Promise((resolve, reject) => {
-            // 0: 正常
-            // -101: 没 sessdata or sessdata 无效
-            if (res.code === 0) {
-                if (!getLibraryConfig().account.uid) {
-                    getLibraryConfig().account.uid = res.data.mid;
-                    save();
-                } else resolve();
-            } else reject(`登录检查失败：${res.code} ${res.message}`);
-        }))
-        .then(() => {
-            updateInfos('登录成功');
-
-            // 4. 启动主线程
-            start();
-            setAllowInput(true);
-        }).catch(e => {
-            updateInfos('登录验证时发生错误：' + e);
-            process.exit(-1);
-        });
+    setAllowInput(true);
 })();

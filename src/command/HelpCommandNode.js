@@ -1,28 +1,37 @@
 exports.execute = execute;
 
 
-function execute(...args) {
+function execute(args) {
     return new Promise((resolve, reject) => {
-        resolve(`👍 帮助信息
-- help
-  查看帮助信息(你正在看)
-- library list
-  查看所有收藏夹和其状态
-- library detail {<id> | n:<name>}
-  查看收藏夹详细信息，使用 \`n:\` 前缀来进行模糊匹配，例如 \`library detail n:默认\`，最终会匹配到 "默认收藏夹" 或更多
-- library {blacklist | whitelist} list
-  查看黑/白名单和其启用状态
-- library {blacklist | whitelist} add {<id> | n:<name>}
-  向黑/白名单添加收藏夹
-- library {blacklist | whitelist} remove {<id> | n:<name>}
-  从黑/白名单移除收藏夹
-- library {blacklist | whitelist} {enable | disable}
-  启用/禁用黑/白名单
-- stop
-  停止同步
-- start
-  开始同步
-- pause {-d <day> | -h <hour> | -m <minute> | -s <second>} [...]
-  暂停同步至 n 后继续`);
+      resolve(`👍 帮助信息
+ - help
+   查看帮助信息(你正在看)
+ - library list
+   查看所有收藏夹
+ - library {blacklist | whitelist} {enable | disable}
+   启用/禁用黑/白名单
+ - library {blacklist | whitelist} detail
+   查看黑/白名单详情
+ - library {blacklist | whitelist} add <id>
+   向黑/白名单添加收藏夹
+ - library {blacklist | whitelist} remove <id>
+   从黑/白名单移除收藏夹
+ - library clean
+   手动运行一次清理
+ - library rec clean [-c]
+   清空回收站
+ - library rec detail
+   查看回收站详情
+ - library rec del <name>
+   删除特定文件/文件夹，你可以使用引号来处理名字中的空格，如：\`library rec del "新建 文本文档.txt"\`
+ - library export {-f | -v} <id>
+   导出收藏夹或视频
+ - start[-c | -r]
+   开始同步
+ - stop
+   停止同步
+ - pause { -d < day > | -h < hour > | -m < minute > | -s < second >} [...]
+   暂停同步至指定时间后继续
+`);
     });
 }

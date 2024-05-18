@@ -1,5 +1,7 @@
 const FS = require('fs');
 const PATH = require('path');
+const { Logger } = require('../util/Logger');
+const { PushService } = require('../PushService');
 
 
 let G_CONFIG = null;
@@ -8,6 +10,8 @@ let G_LIBRARY_CONFIG = null;
 let G_LIBRARY_PATH = null;
 
 const G_DEBUG = true;
+const logger = new Logger();
+const pushService = new PushService(logger);
 
 
 /**
@@ -15,15 +19,17 @@ const G_DEBUG = true;
  * @returns {Number} 结果，0: 失败，1: 成功，2: 部分失败
  */
 function reload() {
-    let path = PATH.join(__dirname, '../../config.json');
-    if (FS.existsSync(path)) {
-        G_CONFIG = require(path);
+    const cfgPath = PATH.join(__dirname, '../../config.json');
+    delete require.cache[cfgPath];
+    if (FS.existsSync(cfgPath)) {
+        G_CONFIG = require(cfgPath);
         G_LIBRARY_PATH = PATH.join(__dirname, '../../' + G_CONFIG.library_path);
     } else return 0;
 
-    path = PATH.join(__dirname, '../../' + G_CONFIG.library_path + '/index.json');
-    if (FS.existsSync(path)) {
-        G_LIBRARY_CONFIG = require(path);
+    const libPath = PATH.join(__dirname, '../../' + G_CONFIG.library_path + '/index.json');
+    delete require.cache[libPath];
+    if (FS.existsSync(libPath)) {
+        G_LIBRARY_CONFIG = require(libPath);
     } else return 2;
 
     return 1;
@@ -51,5 +57,5 @@ function getLibraryPath() {
 module.exports = {
     getConfig, getLibraryConfig, getLibraryPath,
     reload, save,
-    G_DEBUG
+    G_DEBUG, logger, pushService
 }

@@ -4,7 +4,7 @@ exports.execute = execute;
 const { reload } = require('../config/Global.js');
 
 
-function execute(...args) {
+function execute(args) {
     return new Promise((resolve, reject) => {
         switch (reload()) {
             case 0: reject('配置文件重载失败');
