@@ -12,6 +12,7 @@ const FS = require('fs');
 const PATH = require('path');
 const { downloadVideo } = require('./util/BiliUtil.js');
 const { timeout } = require('./util/BaseUtil.js');
+const { fetchEx } = require('./util/RequestUtil.js');
 
 
 /** 同步线程运行状态 boolean|number */
@@ -30,11 +31,7 @@ async function sync() {
 
 
     // 获取全部收藏夹
-    const favs = await fetch('https://api.bilibili.com/x/v3/fav/folder/created/list-all?up_mid=' + getLibraryConfig().account.uid, {
-        headers: {
-            Cookie: 'SESSDATA=' + getLibraryConfig().account.token
-        }
-    }).then(res => res.json());
+    const favs = await fetchEx('https://api.bilibili.com/x/v3/fav/folder/created/list-all?up_mid=' + getLibraryConfig().account.uid);
 
     // 检查变化，这里不用管筛选
     let needSave = false;
@@ -53,11 +50,7 @@ async function sync() {
 
     /** 获取一个收藏夹的全部视频 */
     async function getAllVideo(id, page = 1, allVideos = []) {
-        const res = await fetch(`https://api.bilibili.com/x/v3/fav/resource/list?media_id=${id}&pn=${page}&ps=20`, {
-            headers: {
-                Cookie: 'SESSDATA=' + getLibraryConfig().account.token
-            }
-        }).then(res => res.json());
+        const res = await fetchEx(`https://api.bilibili.com/x/v3/fav/resource/list?media_id=${id}&pn=${page}&ps=20`);
         allVideos.push(...res.data.medias);
 
         if (res.data.has_more) return await getAllVideo(id, page + 1, allVideos);
@@ -145,7 +138,7 @@ async function sync() {
                 pushService.push(`[${ii.id}] (${ii.title}) 同步失败：${e}`);
             }
 
-            await timeout(10000);
+            await timeout(5000); // 10000
         }
     }
 
@@ -182,7 +175,7 @@ async function syncOnce() {
  */
 function start() {
     logger.info('[!] 开始同步线程');
-    running = setInterval(syncOnce, 1000 * 60 * 30); // 30 min
+    running = setInterval(syncOnce, 1000 * 60 * 60); // 1h
     syncOnce();
 }
 
@@ -248,14 +241,18 @@ function clean() {
 }
 
 process.on('unhandledRejection', e => {
-    if (G_DEBUG) console.error('[DEBUG] ' + e);
-
     if (syncing) {
         logger.err('同步时发生错误：' + e);
+        syncing = false;
+    } else if (cleaning) {
+        logger.err('清理时发生错误：' + e);
+        cleaning = false;
     } else {
         logger.err('发生了意料之外的错误，请反馈它：' + e);
         console.error(e);
     }
+
+    if (G_DEBUG) console.error('[DEBUG] ' + e);
 });
 
 /**

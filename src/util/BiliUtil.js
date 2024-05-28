@@ -8,6 +8,7 @@ const { download } = require('./DownloadUtil');
 const PATH = require('path');
 const FS = require('fs');
 const { timeout } = require('./BaseUtil');
+const { fetchEx } = require('./RequestUtil');
 
 
 /**
@@ -37,11 +38,7 @@ async function downloadEp(aid, cid, savePath, ops) {
 
     // 缺少音视频
     if (ops.video || ops.audio) {
-        const res = await fetch(`https://api.bilibili.com/x/player/wbi/playurl?avid=${aid}&cid=${cid}&fnval=4048`, {
-            headers: {
-                Cookie: 'SESSDATA=' + getLibraryConfig().account.token
-            }
-        }).then(res => res.json());
+        const res = await fetchEx(`https://api.bilibili.com/x/player/wbi/playurl?avid=${aid}&cid=${cid}&fnval=4048`);
 
         if (ops.video) {
             const url = new URL(res.data.dash.video[0].base_url);
@@ -80,7 +77,7 @@ async function downloadEp(aid, cid, savePath, ops) {
         const url = await (async () => {
             if (ops.cover_url) return ops.cover_url;
             else {
-                const res = await fetch('https://api.bilibili.com/x/web-interface/view/detail?aid=' + aid).then(res => res.json());
+                const res = await fetchEx('https://api.bilibili.com/x/web-interface/view/detail?aid=' + aid);
                 return new URL(res.data.View.pages.find(v => v.cid === cid).first_frame);
             }
         })();
@@ -96,11 +93,7 @@ async function downloadEp(aid, cid, savePath, ops) {
     }
 
     if (ops.subtitle) {
-        const res = await fetch(`https://api.bilibili.com/x/player/wbi/v2?aid=${aid}&cid=${cid}`, {
-            headers: {
-                Cookie: 'SESSDATA=' + getLibraryConfig().account.token
-            }
-        }).then(res => res.json());
+        const res = await fetchEx(`https://api.bilibili.com/x/player/wbi/v2?aid=${aid}&cid=${cid}`);
 
         if (res.data.subtitle.subtitles.length > 0) {
             for (const i of res.data.subtitle.subtitles) {
@@ -121,19 +114,6 @@ async function downloadEp(aid, cid, savePath, ops) {
     }
 
     // TODO danmaku
-    // if (ops.danmaku) {
-    //     let count = 0;
-    //     while (true) {
-    //         const res = await fetch(`https://api.bilibili.com/x/v2/dm/web/seg.so?type=1&oid=${cid}&segment_index=${++count}`, {
-    //             headers: {
-    //                 Cookie: 'SESSDATA=' + getLibraryConfig().account.token
-    //             }
-    //         }).then(res => res.blob());
-
-    //         logger.info(res.size());
-    //         break;
-    //     }
-    // }
 }
 
 /**
@@ -152,7 +132,7 @@ async function downloadVideo(aid, savePath, ops) {
     savePath = PATH.join(savePath, String(aid));
     if (!FS.existsSync(savePath)) FS.mkdirSync(savePath);
 
-    const res = await fetch(`https://api.bilibili.com/x/web-interface/view/detail?aid=${aid}`).then(res => res.json());
+    const res = await fetchEx(`https://api.bilibili.com/x/web-interface/view/detail?aid=${aid}`);
 
     // 这个是整个视频的封面
     if (ops.cover && !FS.existsSync(PATH.join(savePath, 'cover'))) {
@@ -169,7 +149,7 @@ async function downloadVideo(aid, savePath, ops) {
     for (const i of res.data.View.pages) {
         logger.info(`    [${i.cid}] ` + (i.part.length > 20 ? i.part.substring(0, 20) + '...' : i.part));
 
-        await timeout(getLibraryConfig().sync.length * 2000);
+        // await timeout(getLibraryConfig().sync.length * 2000);
 
         // 这里的 cover 是单个视频的首帧(first_frame)
         // 注意这里有些 ep 没有首帧，比如 cid:326166441

@@ -17,6 +17,7 @@ const { request } = require('http');
  */
 function download(ops, tempPath, savePath, progressCb) {
     return new Promise((resolve, reject) => {
+        if (ops.retry === void 0) ops.retry = 5;
         let totalSize = null;
         let currSize = 0;
         let currPercent = 0;

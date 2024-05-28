@@ -9,7 +9,7 @@ let G_LIBRARY_CONFIG = null;
 /** 本地库的绝对路径 */
 let G_LIBRARY_PATH = null;
 
-const G_DEBUG = true;
+const G_DEBUG = false;
 const logger = new Logger();
 const pushService = new PushService(logger);
 

@@ -5,6 +5,7 @@ const PATH = require('path');
 const { reload, getLibraryConfig, save, getLibraryPath, logger, pushService } = require('./src/config/Global.js');
 const { setAllowInput } = require('./src/CLI.js');
 const { timeout } = require('./src/util/BaseUtil.js');
+const { fetchEx } = require('./src/util/RequestUtil.js');
 
 
 console.clear();
@@ -23,30 +24,10 @@ logger.info(`TIPS: 你可以在同步之外使用一些命令来控制应用，�
 
 // 1. 准备 config
 if (!FS.existsSync('config.json')) {
-    FS.writeFileSync(PATH.join(__dirname, 'config.json', JSON.stringify({
-        "//": '配置文件版本，不要改动',
+    FS.writeFileSync(PATH.join(__dirname, 'config.json'), JSON.stringify({
         version: 1,
-        library_path: '../library',
-        filter: {
-            '//': '两个名单都必须填入收藏夹 id:Number',
-            blacklist: {
-                enable: false,
-                list: []
-            },
-            whitelist: {
-                enable: false,
-                list: []
-            }
-        },
-        '//': '要同步的的内容，下面已经列出了所有候选值',
-        sync: [
-            'video',
-            'audio',
-            'subtitle',
-            'danmu',
-            'cover'
-        ]
-    })));
+        library_path: 'library'
+    }));
 }
 reload(); // 加载配置文件
 
@@ -86,7 +67,7 @@ if (!FS.existsSync(getLibraryPath())) {
             'video',
             'audio',
             'subtitle',
-            'danmu'
+            // 'danmu' // TODO
         ],
         "//": "止步于此，下面的内容请不要修改",
         favorites: [],
@@ -118,14 +99,13 @@ reload(); // 重载一次
         logger.info('尝试获取二维码...');
         // 获取、生成、保存二维码
         const qrcode_key = await (async () => {
-            const res = await fetch('https://passport.bilibili.com/x/passport-login/web/qrcode/generate').then(res => res.json());
+            const res = await fetchEx('https://passport.bilibili.com/x/passport-login/web/qrcode/generate');
             if (res.code === 0) {
                 await _saveQr(res.data.url);
                 logger.info(`二维码已保存至 "${PATH.join(__dirname, './qr.png')}"`);
                 return res.data.qrcode_key;
             } else throw new Error(`获取二维码时发生错误：${res.code} ${res.message}`);
         })();
-        logger.warn(qrcode_key);
 
         const ls = spawn('explorer.exe', [PATH.join(__dirname, './qr.png')]);
 
@@ -133,7 +113,6 @@ reload(); // 重载一次
         logger.info('等待扫描并登录...');
         let count = 0;
         while (++count < 30) {
-            logger.info(count);
             const res = await fetch('https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=' + qrcode_key).then(res => {
                 const reg = /^SESSDATA=([^;]+);/.exec(res.headers.get('set-cookie'));
                 if (reg) getLibraryConfig().account.token = reg[1];
@@ -158,11 +137,7 @@ reload(); // 重载一次
 
 
     logger.info('验证登录...');
-    const res = await fetch('https://api.bilibili.com/x/web-interface/nav', {
-        headers: {
-            Cookie: 'SESSDATA=' + getLibraryConfig().account.token
-        }
-    }).then(res => res.json());
+    const res = await fetchEx('https://api.bilibili.com/x/web-interface/nav');
 
     // 0: 正常
     // -101: 没 sessdata or sessdata 无效
