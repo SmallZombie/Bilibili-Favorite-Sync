@@ -25,11 +25,9 @@ function execute(args) {
  - library rec del <name>
    删除特定文件/文件夹，你可以使用引号来处理名字中的空格，如：\`library rec del "新建 文本文档.txt"\`
  - library export {-f | -v} <id>
-   导出收藏夹或视频
+   导出视频或收藏夹中的所有视频
  - start[-c | -r]
    开始同步
- - stop
-   停止同步
  - pause { -d < day > | -h < hour > | -m < minute > | -s < second >} [...]
    暂停同步至指定时间后继续
 `);
