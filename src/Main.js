@@ -207,10 +207,21 @@ function clean() {
 
     const recPath = PATH.join(getLibraryPath(), 'recycle');
 
-    // 获取全部收藏夹的全部引用
     let quotes = [];
+    // 获取本地收藏夹的全部引用
     const favsPath = PATH.join(getLibraryPath(), 'favorites');
     for (const i of FS.readdirSync(favsPath)) {
+        const favId = Number(i.split('.')[0]);
+
+        // 跳过黑名单
+        if (getLibraryConfig().filter.blacklist.enable && getLibraryConfig().filter.blacklist.list.includes(favId)) {
+            continue;
+        }
+        // 跳过白名单
+        if (getLibraryConfig().filter.whitelist.enable && !getLibraryConfig().filter.whitelist.list.includes(favId)) {
+            continue;
+        }
+
         const file = require(PATH.join(favsPath, i));
         quotes = quotes.concat(file);
     }
