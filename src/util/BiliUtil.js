@@ -3,7 +3,7 @@ module.exports = {
 }
 
 
-const { getLibraryConfig, getLibraryPath, logger, pushService } = require('../config/Global');
+const { getLibraryConfig, getLibraryPath, logger, pushService, G_DEBUG } = require('../config/Global');
 const { download } = require('./DownloadUtil');
 const PATH = require('path');
 const FS = require('fs');
@@ -95,12 +95,12 @@ async function downloadEp(aid, cid, savePath, ops) {
     if (ops.subtitle) {
         const res = await fetchEx(`https://api.bilibili.com/x/player/wbi/v2?aid=${aid}&cid=${cid}`);
 
-        if (res.data.subtitle.subtitles.length > 0) {
+        if (res.data.subtitle && res.data.subtitle.subtitles.length > 0) {
             for (const i of res.data.subtitle.subtitles) {
                 const fileName = 'subtitle_' + i.id;
                 if (FS.existsSync(PATH.join(savePath, fileName))) continue;
 
-                const url = new URL(i.subtitle_url);
+                const url = new URL('https://' + i.subtitle_url);
                 try {
                     await download({
                         hostname: url.hostname,
@@ -160,8 +160,11 @@ async function downloadVideo(aid, savePath, ops) {
         try { // 如果发生错误，尝试只跳过一集
             await downloadEp(aid, i.cid, savePath, ops);
         } catch (e) {
-            logger.err('    ' + e, true);
             pushService.push(`[${aid}] [${i.cid}] (${i.part}) 同步失败：${e}`);
+            if (G_DEBUG) {
+                logger.err('    ' + e, true);
+                console.error(e);
+            }
         }
     }
 }
